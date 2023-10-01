@@ -22,8 +22,6 @@ use git2::{Repository, Status, Signature, ObjectType, Remote, RemoteCallbacks, C
 // # Arguments: the organization string slice
 // # Returns: nothing
 
-
-
 pub fn publish(org_string: &str) {
     dotenv().ok();
     
@@ -89,7 +87,18 @@ fn handle_repo_changes(repo: &Repository, parent_commit: Option<&git2::Commit>, 
             panic!("Unexpected error");
         }
     if prompt_yes_no("Would you like to push these changes?") {
-            push_to_remotes(repo, remote);
+        if let Some(current) = remote {
+            if let Some(url) = current.url() {
+                println!("Remote URL: {}", url);
+                push_to_remote(repo.path().to_str().unwrap(), url);
+            } else {
+                println!("Failed to retrieve remote URL.");
+                return;
+            }
+        } else {
+            panic!("No valid remote provided.");
+        }
+            
     }
 }
 }
@@ -107,14 +116,17 @@ fn handle_no_remote(repo: &Repository, org_string: &str, dir_path: &Path) {
             .to_str()
             .expect("Failed to convert to string");
 
-        let remote_url = format!("git@github.com:{}/{}", org_string, remote_name);
+        let remote_url = format!("git@git.com:{}/{}", org_string, remote_name);
         println!("Remote: {} look good?", remote_url);
 
         if prompt_yes_no("Would you like to add a remote? ") {
             let remote_url = remote_url.trim();
             // Call the function
+            let command = format!("git remote add origin {}", remote_url);
+            run_command(&command);
             if let Ok(mut remote) = repo.remote_anonymous(remote_url) {
-                push_to_remotes(repo, Some(&mut remote));
+                //push_to_remotes(repo, Some(&mut remote));
+                push_to_remote(repo.path().to_str().unwrap(), remote_url);
             } else {
                 println!("Failed to create remote");
             }
@@ -128,24 +140,49 @@ fn handle_no_remote(repo: &Repository, org_string: &str, dir_path: &Path) {
 // gitcli = git push
 // # Arguments: the repository mut git2::Repository, the remote git2::Remote, the remote url string slice
 // # Returns: nothing
+fn push_to_remote(repo: &str, remote_url: &str) {
+    // Get the repository name
+    let repo_name = repo.to_lowercase().replace(" ", "_");
 
-fn push_to_remotes(repo: &Repository, maybe_remote: Option<&mut Remote>) {
-    if let Some(mut remote) = maybe_remote.cloned() {
-        let mut remote_callbacks = RemoteCallbacks::new();
-        // Set up your remote callbacks as needed
-        let mut options = PushOptions::new();
-        options.remote_callbacks(create_remote_callbacks());
-        println!("Pushing to remote...");
-        // Push to the remote with the given URL
-        println!("SSH Credentials: {:?}", remote.cred());
+    // Navigate to the repository directory
+    let cd_repo_dir_cmd = format!("cd {}", repo_name);
+    run_command(&cd_repo_dir_cmd);
+    // Push to GitHub using SSH
+    let git_push_cmd = "git push -u origin main";
+    run_command(git_push_cmd);
 
-        remote
-            .push(&[String::from("refs/heads/main:refs/heads/main")], Some(&mut options))
-            .expect("Failed to push");
-    } else {
-        println!("No valid remote provided.");
+    // Navigate back to the previous directory
+    run_command("cd ..");
+}
+
+fn run_command(command: &str) {
+    let output = Command::new("bash")
+        .arg("-c")
+        .arg(command)
+        .output()
+        .expect("Failed to execute command");
+
+    if !output.status.success() {
+        eprintln!("Command failed: {:?}", command);
+        eprintln!("Error: {:?}", String::from_utf8_lossy(&output.stderr));
     }
 }
+// fn push_to_remotes(repo: &Repository, maybe_remote: Option<&mut Remote>) {
+//     if let Some(mut remote) = maybe_remote.cloned() {
+//         let mut remote_callbacks = RemoteCallbacks::new();
+//         // Set up your remote callbacks as needed
+//         let mut options = PushOptions::new();
+//         options.remote_callbacks(create_remote_callbacks());
+//         println!("Pushing to remote...");
+//         // Push to the remote with the given URL
+        
+//         remote
+//             .push(&[String::from("refs/heads/main:refs/heads/main")], Some(&mut options))
+//             .expect("Failed to push");
+//     } else {
+//         println!("No valid remote provided.");
+//     }
+// }
 
 
 //This function commit changes to a repository that has a commit HEAD
