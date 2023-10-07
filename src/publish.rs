@@ -1,11 +1,11 @@
 use std::io::{self, Read};
 use std::borrow::Cow;
-use std::fs::{self, File};
+use std::fs::{self};
 use std::path::{Path};
 use std::process::Command;
 use std::{env, str, error::Error};
 use dotenv::dotenv;
-use git2::{Index, IndexAddOption, Repository, Status, Signature, ObjectType, Remote, RemoteCallbacks, Cred, PushOptions};
+use git2::{Repository, Status, Signature, Remote, RemoteCallbacks, Cred, PushOptions};
 
 // Publish Function:
 // The publish function is called, and it checks if a repository exists in a directory.
@@ -36,12 +36,9 @@ pub fn publish(org_string: &str) {
 
                     if repo_path.exists() {
                         if let Ok(repo) = Repository::open(&dir_path) {
-                            let has_uncommitted_changes = repo
-                                .statuses(None)
-                                .map(|statuses| statuses.iter().any(|status| status.status() != Status::CURRENT))
-                                .unwrap_or(false);
-
+                            let has_uncommitted_changes = has_uncommitted_changes(&repo);
                             if has_uncommitted_changes {
+                               // Todo Refactor to method call handle_repo_changes
                                 if let Ok(reference) = repo.head() {
                                     if let Ok(parent_commit) = reference.peel_to_commit() {
                                         // Obtain a mutable reference to the remote
@@ -108,7 +105,7 @@ fn handle_repo_changes(repo: &Repository, parent_commit: Option<&git2::Commit>, 
 // git cli = git remote add origin git@git:com:org_string/dir_path
 // # Arguments: the repository git2::Repository, the organization string slice, the directory path
 // # Returns: nothing
-fn handle_no_remote(repo: &Repository, org_string: &str, dir_path: &Path) {
+fn handle_no_remote(_repo: &Repository, org_string: &str, dir_path: &Path) {
     println!("No remote found");
 
     if prompt_yes_no("Would you like to add a remote?") {
@@ -141,10 +138,21 @@ fn handle_no_remote(repo: &Repository, org_string: &str, dir_path: &Path) {
             println!("No remote added");
         }
     }
+    let has_uncommitted_changes = has_uncommitted_changes(_repo);
+    if has_uncommitted_changes {
+        if prompt_yes_no("Would you like to commit these changes?") {
+            let head_ref = _repo.head().expect("Failed to get HEAD");
+                if let Ok(parrent_commit) = head_ref.peel_to_commit(){
+            commit_changes(_repo, Some(&parrent_commit));
+                } else {
+                    panic!("Failed to get parent commit");
+                }
+        }
+    }
     // git remote -u origin main
     if prompt_yes_no("Would you like to try and create the remote?"){
         let mut create_remote = Command::new("git");
-        create_remote.arg("remote");
+        create_remote.arg("");
         create_remote.arg("-u");
         create_remote.arg("origin");
         create_remote.arg("main");
@@ -157,9 +165,9 @@ fn handle_no_remote(repo: &Repository, org_string: &str, dir_path: &Path) {
 // gitcli = git push
 // # Arguments: the repository mut git2::Repository, the remote git2::Remote, the remote url string slice
 // # Returns: nothing
-fn push_to_remote(repo: &Repository, remote_url: &str) {
+fn push_to_remote(repo: &Repository, _remote_url: &str) {
     let mut remote = repo.find_remote("origin").expect("Failed to find remote");
-    let mut remote_callbacks = RemoteCallbacks::new();
+    let _remote_callbacks = RemoteCallbacks::new();
     // Set up your remote callbacks as needed
     let mut options = PushOptions::new();
     options.remote_callbacks(create_remote_callbacks());
@@ -215,7 +223,7 @@ pub fn commit_changes(repo: &Repository, parent_commit: Option<&git2::Commit>) {
     let tree_id = index.write_tree().expect("Failed to write tree");
 
     // Get the HEAD reference
-    let head = repo.head().expect("Failed to get HEAD");
+    let _head = repo.head().expect("Failed to get HEAD");
 
     // Get the committer's information
     let signature = Signature::now(&get_username().expect("Failed to get username"), &get_user_email().expect("Failed to get email")).expect("Failed to create signature");
@@ -245,7 +253,7 @@ pub fn initial_commit(repo: &Repository) {
     // Get the committer's information
     let signature = Signature::now(&get_username().expect("Failed to get username"), &get_user_email().expect("Failed to get email")).expect("Failed to create signature");
     
-    let commit_oid = repo.commit(
+    let _commit_oid = repo.commit(
         Some("HEAD"),
         &signature,
         &signature,
@@ -254,8 +262,15 @@ pub fn initial_commit(repo: &Repository) {
         &[],
     ).expect("Failed to commit");
 }
-// This fuction ask if they wand to do and action
-
+fn has_uncommitted_changes(repo: &Repository) -> bool {
+    let statuses = repo.statuses(None).expect("Failed to get statuses");
+    for entry in statuses.iter() {
+        if entry.status() != Status::CURRENT {
+            return true;
+        }
+    }
+    false
+}
 // # Arguments
 // * `question` - A string slice that holds the question to ask the user
 // # Returns retruns a string slice that holds the answer to the question
@@ -332,7 +347,7 @@ fn create_ssh_cred() -> Result<Cred, Box<dyn Error>> {
     //let public_key_path = env::var("PUBLIC_KEY_PATH").expect("Failed to get public key path");
     // let private_key_path = env::var("PRIVATE_KEY_PATH").expect("Failed to get private key path");
 
-    let pub_key: Option<Cow<'_, [u8]>> = Some(fs::read(&public_key_path).unwrap().into());
+    let _pub_key: Option<Cow<'_, [u8]>> = Some(fs::read(&public_key_path).unwrap().into());
     let pub_key_path = Path::new(&public_key_path);
     //panic!("public key path: {}", pub_key_path.display());
     //let private_key: Option<Cow<'_, [u8]>> = Some(fs::read(&private_key_path).unwrap().into());

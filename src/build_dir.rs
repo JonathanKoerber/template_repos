@@ -1,7 +1,7 @@
 
 use std::fs::{self, File};
-use std::io::{self, Write};
-use std::path::{Path, PathBuf};
+use std::io::{Write};
+use std::path::{Path};
 
 pub fn build_dir(template_string: &str, num_dirs: u32) {
     for i in 1..=num_dirs {

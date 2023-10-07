@@ -6,7 +6,7 @@ mod match_files;
 mod publish;
 mod create_repo;
 use std::io::{self, Read};
-use std::fs::{self, File};
+use std::fs::{self};
 
 fn read_public_key(path: &str) -> io::Result<String> {
     let mut file = fs::File::open(path)?;
