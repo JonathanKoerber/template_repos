@@ -62,20 +62,22 @@ To use the CLI tool, run the executable with the desired command and required ar
    rust_cli match-files
    ```
     * If you have already run either of the build dirs command and have a buch course module it will sort them into the matching dir
-4. **Publish Repository (`publish`)**:
-   ```
-   rust_cli publish <organization>
-   ```
-   ~this doesn't work right now ther is an issue with credentails to push to github~
-   * This pushes all uncomitted work to githup. 
-   * If there is no remote it will create the remote repo.
-   * yeha
-
 5. **Create Repository (`create_repo`)**:
    ```
    rust_cli create_repo
    ```
     * this will got through all the dirs for build-dir if there in no .git it will intilize the repo. 
+    
+4. **Publish Repository (`publish`)**:
+   ```
+   rust_cli publish <organization>
+   ```
+   this doesn't work right now ther is an issue with credentails to push to github
+   * This pushes all uncomitted work to githup. 
+   * If there is no remote it will create the remote repo.
+   * yeha
+
+
 
 ### Example Usage
 
@@ -93,16 +95,16 @@ To use the CLI tool, run the executable with the desired command and required ar
    ```
    rust_cli match-files
    ```
+4. Create a new repository:
+   ```
+   rust_cli create_repo
+   ```
 
-4. Publish a repository for an organization:
+5. Publish a repository for an organization:
    ```
    rust_cli publish "organization-name"
    ```
 
-5. Create a new repository:
-   ```
-   rust_cli create_repo
-   ```
 
 ### Workflow
 

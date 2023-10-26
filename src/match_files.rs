@@ -1,42 +1,43 @@
 use std::fs;
-use std::path::{Path};
+use std::path::Path;
 use std::collections::HashMap;
 
-fn get_last_four_chars(s: &str) -> String {
-    if s.len() <= 4 {
-        s.to_string()
-    } else {
-        s[s.len() - 4..].to_string()
+fn extract_two_digit_numbers(s: &str) -> Vec<u32> {
+    let mut numbers = Vec::new();
+
+    for i in 0..s.len() - 1 {
+        if let Ok(num) = s[i..i + 2].parse::<u32>() {
+            if num >= 1 && num <= 10 {
+                numbers.push(num);
+            }
+        }
     }
+
+    numbers
 }
-fn get_first_four_chars(s: &str) -> String {
-    if s.len() <= 4 {
-        s.to_string()
-    } else {
-        s[..4].to_string()
-    }
-}
+
 pub fn match_files() {
     // Get all directories in the current directory
     let directories: Vec<String> = fs::read_dir(".")
-    .expect("Failed to read directory")
-    .filter_map(|entry| {
-        if let Ok(entry) = entry {
-            if entry.file_type().ok()?.is_dir() {
-                return Some(entry.file_name().to_string_lossy().into_owned());
+        .expect("Failed to read directory")
+        .filter_map(|entry| {
+            if let Ok(entry) = entry {
+                if entry.file_type().ok()?.is_dir() {
+                    return Some(entry.file_name().to_string_lossy().into_owned());
+                }
             }
-        }
-        None
-    })
-    .collect();
+            None
+        })
+        .collect();
 
-
-    // Create a map of last four characters of directory names to directory names
-    let mut dir_map: HashMap<String, String> = HashMap::new();
+    // Create a map of two-digit numbers to directory names
+    let mut dir_map: HashMap<u32, String> = HashMap::new();
 
     for dir in directories {
-        let last_four = get_last_four_chars(&dir);
-        dir_map.insert(last_four, dir);
+        let numbers = extract_two_digit_numbers(&dir);
+        for num in numbers {
+            dir_map.insert(num, dir.clone());
+        }
     }
 
     // Get all files in the current directory
@@ -51,13 +52,17 @@ pub fn match_files() {
             None
         });
 
-    // Move files to respective directories based on the last four characters of their names
+    // Move files to respective directories based on the extracted two-digit numbers
     for file in files {
         if let Some(file_name) = file.file_name().and_then(|f| f.to_str()) {
-            let first_four = get_first_four_chars(file_name);
-            if let Some(dir_name) = dir_map.get(&first_four) {
-                let dest_path = Path::new(&dir_name).join(file.file_name().unwrap_or_default());
-                fs::rename(&file, dest_path).expect("Failed to move file");
+            let numbers = extract_two_digit_numbers(file_name);
+            for num in numbers {
+                if let Some(dir_name) = dir_map.get(&num) {
+                    let dest_path = Path::new(&dir_name).join(file.file_name().unwrap_or_default());
+                    print!("Moving {} to: {}", file_name, &dest_path.display());
+                    fs::rename(&file, dest_path).expect("Failed to move file");
+                    print!("Files have been moved check the assignment directorys.")
+                }
             }
         }
     }

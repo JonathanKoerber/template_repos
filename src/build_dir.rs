@@ -52,31 +52,3 @@ fn read_template_readme_content() -> String {
 }
 
 
-// pub fn build_dir_readme(template_string: &str, num_dirs: u32, course_name: &str, course_type: &str, readme_path: &str) {
-//     for i in 1..=num_dirs {
-//         let dir_name = format!("{}{:02}", template_string, i);
-//         let dir_path = Path::new(".").join(&dir_name);
-
-//         fs::create_dir(&dir_path).expect("Failed to create directory");
-
-//         println!("Created directory: {:?}", dir_path);
-
-//         // Create README content
-//         let readme_content = format!(
-//             "# {}\n\n### {} {:02}\n\n",
-//             course_name, course_type, i
-//         );
-
-//         // Append content to README file
-//         let mut readme_file = fs::OpenOptions::new()
-//         .create(true)
-//         .append(true)
-//         .open(dir_path.join(readme_path))
-//         .expect("Failed to open README file");
-
-// // Append content to README file
-// writeln!(readme_file, "{}", readme_content)
-//     .expect("Failed to write README content");
-// }
-// }
-

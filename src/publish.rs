@@ -5,7 +5,7 @@ use std::path::{Path};
 use std::process::Command;
 use std::{env, str, error::Error};
 use dotenv::dotenv;
-use git2::{Repository, Status, Signature, Remote, RemoteCallbacks, Cred, PushOptions};
+use git2::{Repository, Status, Signature, Remote, RemoteCallbacks, Cred, PushOptions, BranchType};
 
 // Publish Function:
 // The publish function is called, and it checks if a repository exists in a directory.
@@ -24,17 +24,17 @@ use git2::{Repository, Status, Signature, Remote, RemoteCallbacks, Cred, PushOpt
 
 pub fn publish(org_string: &str) {
     dotenv().ok();
-    
     let directory_to_search = ".";
-
     if let Ok(entries) = std::fs::read_dir(directory_to_search) {
+        
         for entry in entries {
             if let Ok(entry) = entry {
                 if entry.file_type().map_or(false, |ft| ft.is_dir()) {
                     let dir_path = entry.path();
                     let repo_path = dir_path.join(".git");
-
                     if repo_path.exists() {
+                        print!("Found repository: {:?} ", dir_path.display());
+                        // Open the repository
                         if let Ok(repo) = Repository::open(&dir_path) {
                             let has_uncommitted_changes = has_uncommitted_changes(&repo);
                             if has_uncommitted_changes {
@@ -52,16 +52,19 @@ pub fn publish(org_string: &str) {
                                         panic!("Failed to get parent commit");
                                     }
                                 } else {
-                                    panic!("Failed to get HEAD reference");
+                                    print!("Failed to get HEAD reference");
+                                    handle_no_remote(&repo, org_string, &dir_path);
+                                   // panic!("Failed to get HEAD reference");
+
                                 }
                             } else {
                                 handle_no_remote(&repo, org_string, &dir_path);
                             }
-                        } else {
-                            println!("Failed to open repository for {:?}", dir_path);
-                        }
+                        } 
                     }
                 }
+            }else{
+                println!("No repository were found try funning create_repo first");
             }
         }
     }
@@ -73,6 +76,8 @@ pub fn publish(org_string: &str) {
 // # Arguments: the repository git2::Repository, the parent commit git2::Commit
 // # Returns: nothing
 fn handle_repo_changes(repo: &Repository, parent_commit: Option<&git2::Commit>, remote: Option<&mut Remote>) {
+    println!("Uncommitted changes found.");
+    println!("handle_repo_changes");
     let head = repo.head().expect("Failed to get HEAD");
     if head.target().is_none() {
         println!("No HEAD found. Perform initial commit.");
@@ -106,8 +111,8 @@ fn handle_repo_changes(repo: &Repository, parent_commit: Option<&git2::Commit>, 
 // # Arguments: the repository git2::Repository, the organization string slice, the directory path
 // # Returns: nothing
 fn handle_no_remote(_repo: &Repository, org_string: &str, dir_path: &Path) {
-    println!("No remote found");
 
+    print!("\nNo remote found\n");
     if prompt_yes_no("Would you like to add a remote?") {
         let remote_name = dir_path
             .file_name()
@@ -115,32 +120,37 @@ fn handle_no_remote(_repo: &Repository, org_string: &str, dir_path: &Path) {
             .to_str()
             .expect("Failed to convert to string");
 
-        let remote_url = format!("git@git.com:{}/{}", org_string, remote_name);
+        let remote_url = format!("git@github.com:{}/{}.git", org_string, remote_name);
         println!("Remote: {} look good?", remote_url);
 
-        if prompt_yes_no("Would you like to add a remote? ") {
+        if prompt_yes_no("Do you like this remote address? ") {
             let remote_url = remote_url.trim();
             let mut add_origin = Command::new("git");
             add_origin.arg("remote");
             add_origin.arg("add");
             add_origin.arg("origin");
+            print!("remote_url: {}", remote_url);
             add_origin.arg(remote_url);
+           
             let out = add_origin.output().expect("Failed to execute command");
             println!("status: {}", out.status);
-            println!("stdout: {}", String::from_utf8_lossy(&out.stdout));
-            // if let Ok(mut remote) = repo.remote_anonymous(remote_url) {
 
-            //     push_to_remote(repo, remote_url);
-            // } else {
-            //     println!("Failed to create remote");
-            // }
+            // Print the standard output
+            let out_str = str::from_utf8(&out.stdout).expect("Failed to convert stdout to string");
+            println!("Standard output: {}", out_str);
+
+            // Print the standard error
+            let err_str = str::from_utf8(&out.stderr).expect("Failed to convert stderr to string");
+            println!("Standard error: {}", err_str);
+
+            
         } else {
             println!("No remote added");
         }
     }
     let has_uncommitted_changes = has_uncommitted_changes(_repo);
     if has_uncommitted_changes {
-        if prompt_yes_no("Would you like to commit these changes?") {
+        if prompt_yes_no("You have uncommited changes. Would you like to commit them?") {
             let head_ref = _repo.head().expect("Failed to get HEAD");
                 if let Ok(parrent_commit) = head_ref.peel_to_commit(){
             commit_changes(_repo, Some(&parrent_commit));
@@ -166,6 +176,7 @@ fn handle_no_remote(_repo: &Repository, org_string: &str, dir_path: &Path) {
 // # Arguments: the repository mut git2::Repository, the remote git2::Remote, the remote url string slice
 // # Returns: nothing
 fn push_to_remote(repo: &Repository, _remote_url: &str) {
+    print!("Push to remote");
     let mut remote = repo.find_remote("origin").expect("Failed to find remote");
     let _remote_callbacks = RemoteCallbacks::new();
     // Set up your remote callbacks as needed
@@ -179,41 +190,8 @@ fn push_to_remote(repo: &Repository, _remote_url: &str) {
         .expect("Failed to push");
 }
 
-// fn run_command(command: &str) {
-//     let output = Command::new("bash")
-//         .arg("-c")
-//         .arg(command)
-//         .output()
-//         .expect("Failed to execute command");
-
-//     if !output.status.success() {
-//         eprintln!("Command failed: {:?}", command);
-//         eprintln!("Error: {:?}", String::from_utf8_lossy(&output.stderr));
-//     }
-// }
-// fn push_to_remotes(repo: &Repository, maybe_remote: Option<&mut Remote>) {
-//     if let Some(mut remote) = maybe_remote.cloned() {
-//         let mut remote_callbacks = RemoteCallbacks::new();
-//         // Set up your remote callbacks as needed
-//         let mut options = PushOptions::new();
-//         options.remote_callbacks(create_remote_callbacks());
-//         println!("Pushing to remote...");
-//         // Push to the remote with the given URL
-        
-//         remote
-//             .push(&[String::from("refs/heads/main:refs/heads/main")], Some(&mut options))
-//             .expect("Failed to push");
-//     } else {
-//         println!("No valid remote provided.");
-//     }
-// }
-
-
-//This function commit changes to a repository that has a commit HEAD
-// # Arguments: the repository git2::Repository, the parent commit git2::Commit
-// # Returns: nothing
-
 pub fn commit_changes(repo: &Repository, parent_commit: Option<&git2::Commit>) {
+    print!("Commit changes");
     // Create an index to prepare for the commit
     let mut index = repo.index().expect("Failed to open index");
     index.add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None).expect("Failed to add to index");
@@ -242,26 +220,35 @@ pub fn commit_changes(repo: &Repository, parent_commit: Option<&git2::Commit>) {
 // # Arguments: the repository git2::Repository
 // # Returns: nothing
 pub fn initial_commit(repo: &Repository) {
-    // Create an index to prepare for the commit
-    let mut index = repo.index().expect("Failed to open index");
-    index.add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None).expect("Failed to add to index");
-    index.write().expect("Failed to write index");
+    print!("\nInitial commit");
 
+    // Create an index adding all files to staging area
+    let mut index = repo.index().expect("Failed to open index");
+    index.add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)
+        .expect("Failed to add to index");
+    index.write().expect("Failed to write index");
     // Create a tree from the index
     let tree_id = index.write_tree().expect("Failed to write tree");
 
     // Get the committer's information
-    let signature = Signature::now(&get_username().expect("Failed to get username"), &get_user_email().expect("Failed to get email")).expect("Failed to create signature");
+    let signature = Signature::now(&get_username()
+        .expect("Failed to get username"), &get_user_email()
+        .expect("Failed to get email")).expect("Failed to create signature");
     
+    print!("\nCommiting Repo" );
+
     let _commit_oid = repo.commit(
         Some("HEAD"),
         &signature,
         &signature,
         "Initial commit",
         &repo.find_tree(tree_id).expect("Failed to find tree"),
-        &[],
+        &[],  // Provide as a slice
     ).expect("Failed to commit");
+
+    println!("Committed to main branch with commit id: {}", &_commit_oid)
 }
+
 fn has_uncommitted_changes(repo: &Repository) -> bool {
     let statuses = repo.statuses(None).expect("Failed to get statuses");
     for entry in statuses.iter() {
@@ -274,7 +261,7 @@ fn has_uncommitted_changes(repo: &Repository) -> bool {
 // # Arguments
 // * `question` - A string slice that holds the question to ask the user
 // # Returns retruns a string slice that holds the answer to the question
-fn prompt_yes_no(question: &str) -> bool {
+pub fn prompt_yes_no(question: &str) -> bool {
     println!("{} (y/n)", question);
     let mut response = String::new();
     io::stdin().read_line(&mut response).expect("Failed to read user input");
@@ -287,31 +274,26 @@ fn prompt_yes_no(question: &str) -> bool {
 // This function gets the username the user is logged in 
 // # Return string slice that holds the username
 fn get_username() -> Option<String> {
-    if cfg!(target_os = "windows") {
-        Some(env!("USERNAME").to_string())
-    } else {
-        let output = Command::new("whoami").output().ok()?;
-        let username = str::from_utf8(&output.stdout).ok()?.trim();
-        Some(username.to_string())
-    }
+    //get username
+    let mut command = Command::new("git");
+    command.arg("config");
+    command.arg("user.name");
+    let out = command.output().expect("Failed to execute command");
+    //return username;
+    let username = str::from_utf8(&out.stdout).ok()?.trim().to_string();
+    Some(username)
 }
 // This function gets the email of the user
 // # Return string slice that holds the email
 fn get_user_email() -> Option<String> {
-    if cfg!(target_os = "windows") {
-        // Windows specific code to get email
-        // Replace with the appropriate method to retrieve the email on Windows
-        Some("windows@example.com".to_string())
-    } else {
-        // For Unix-like systems, you might use a command to get the email
-        let output = Command::new("sh")
-            .arg("-c")
-            .arg("echo $USER@$HOSTNAME")
-            .output()
-            .ok()?;
-        let email = str::from_utf8(&output.stdout).ok()?.trim();
-        Some(email.to_string())
-    }
+    //get email
+    let mut command = Command::new("git");
+    command.arg("config");
+    command.arg("user.email");
+    let out = command.output().expect("Failed to execute command");
+    //return email;
+    let email = str::from_utf8(&out.stdout).ok()?.trim().to_string();
+    Some(email)
 }
 
 // This function reads the public key from the path
