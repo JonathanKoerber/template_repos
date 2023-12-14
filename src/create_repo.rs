@@ -2,8 +2,8 @@ use std::fs;
 use std::io::{self};
 
 use git2::{Repository, RepositoryInitOptions};
-use crate::publish::initial_commit;
-use crate::publish::prompt_yes_no;
+use crate::git_commands::initial_commit;
+use crate::utils::prompt_yes_no;
 
 pub fn create_repo() {
     // Specify the directory to search for repositories
@@ -19,8 +19,8 @@ pub fn create_repo() {
 
                     // Check if the directory is a Git repository
                     if !repo_path.exists() {
-                        let promt_question = format!("Would you like to create a Git repository in this directory {}?", dir_path.display());
-                        if prompt_yes_no(&promt_question){
+                        let prompt_question = format!("Would you like to create a Git repository in this directory {}?", dir_path.display());
+                        if prompt_yes_no(&prompt_question){
                             // Create a Git repository with main as the default branch
                             let mut init_opts = RepositoryInitOptions::new();
                             init_opts.initial_head("refs/heads/main");
@@ -33,6 +33,7 @@ pub fn create_repo() {
                              if let Ok(repo) = Repository::open(&dir_path) {
                                  // Commit the changes
                                  initial_commit(&repo);
+                                 // print remote url to screen
                              }
                          }
                      }

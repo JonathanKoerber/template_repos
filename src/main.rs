@@ -6,6 +6,9 @@ mod match_files;
 mod publish;
 mod create_repo;
 mod unzip;
+mod git_commands;
+mod utils;
+mod git_credentials;
 use std::io::{self, Read};
 use std::fs::{self};
 

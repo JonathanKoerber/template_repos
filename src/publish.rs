@@ -1,6 +1,7 @@
-use std::io::{self, Read};
-use std::borrow::Cow;
-use std::fs::{self};
+use crate::utils::prompt_yes_no;
+use crate::git_commands::commit_changes;
+use crate::git_commands::push_to_remote;
+use crate::git_commands::has_uncommitted_changes;
 use std::path::{Path};
 use std::process::Command;
 use std::{env, str, error::Error};
@@ -138,12 +139,9 @@ fn handle_no_remote(_repo: &Repository, org_string: &str, dir_path: &Path) {
             // Print the standard output
             let out_str = str::from_utf8(&out.stdout).expect("Failed to convert stdout to string");
             println!("Standard output: {}", out_str);
-
             // Print the standard error
             let err_str = str::from_utf8(&out.stderr).expect("Failed to convert stderr to string");
             println!("Standard error: {}", err_str);
-
-            
         } else {
             println!("No remote added");
         }
@@ -171,175 +169,7 @@ fn handle_no_remote(_repo: &Repository, org_string: &str, dir_path: &Path) {
     }
 }
 
-// This function pushes to a remote there must be a remote already in the repository
-// gitcli = git push
-// # Arguments: the repository mut git2::Repository, the remote git2::Remote, the remote url string slice
-// # Returns: nothing
-fn push_to_remote(repo: &Repository, _remote_url: &str) {
-    print!("Push to remote");
-    let mut remote = repo.find_remote("origin").expect("Failed to find remote");
-    let _remote_callbacks = RemoteCallbacks::new();
-    // Set up your remote callbacks as needed
-    let mut options = PushOptions::new();
-    options.remote_callbacks(create_remote_callbacks());
-    println!("Pushing to remote...");
-    // Push to the remote with the given URL
-    
-    remote
-        .push(&[String::from("refs/heads/main:refs/heads/main")], Some(&mut options))
-        .expect("Failed to push");
-}
-
-pub fn commit_changes(repo: &Repository, parent_commit: Option<&git2::Commit>) {
-    print!("Commit changes");
-    // Create an index to prepare for the commit
-    let mut index = repo.index().expect("Failed to open index");
-    index.add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None).expect("Failed to add to index");
-    index.write().expect("Failed to write index");
-
-    // Create a tree from the index
-    let tree_id = index.write_tree().expect("Failed to write tree");
-
-    // Get the HEAD reference
-    let _head = repo.head().expect("Failed to get HEAD");
-
-    // Get the committer's information
-    let signature = Signature::now(&get_username().expect("Failed to get username"), &get_user_email().expect("Failed to get email")).expect("Failed to create signature");
-    
-    repo.commit(
-        Some("HEAD"),
-        &signature,
-        &signature,
-        "Adding Content",
-        &repo.find_tree(tree_id).expect("Failed to find tree"),
-        &[parent_commit.unwrap()],  // Provide as a slice
-    ).expect("Failed to commit");
-    
-}
-// Create a commit with in a dirtory is there not a commit HEAS
-// # Arguments: the repository git2::Repository
-// # Returns: nothing
-pub fn initial_commit(repo: &Repository) {
-    print!("\nInitial commit");
-
-    // Create an index adding all files to staging area
-    let mut index = repo.index().expect("Failed to open index");
-    index.add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)
-        .expect("Failed to add to index");
-    index.write().expect("Failed to write index");
-    // Create a tree from the index
-    let tree_id = index.write_tree().expect("Failed to write tree");
-
-    // Get the committer's information
-    let signature = Signature::now(&get_username()
-        .expect("Failed to get username"), &get_user_email()
-        .expect("Failed to get email")).expect("Failed to create signature");
-    
-    print!("\nCommiting Repo" );
-
-    let _commit_oid = repo.commit(
-        Some("HEAD"),
-        &signature,
-        &signature,
-        "Initial commit",
-        &repo.find_tree(tree_id).expect("Failed to find tree"),
-        &[],  // Provide as a slice
-    ).expect("Failed to commit");
-
-    println!("Committed to main branch with commit id: {}", &_commit_oid)
-}
-
-fn has_uncommitted_changes(repo: &Repository) -> bool {
-    let statuses = repo.statuses(None).expect("Failed to get statuses");
-    for entry in statuses.iter() {
-        if entry.status() != Status::CURRENT {
-            return true;
-        }
-    }
-    false
-}
-// # Arguments
-// * `question` - A string slice that holds the question to ask the user
-// # Returns retruns a string slice that holds the answer to the question
-pub fn prompt_yes_no(question: &str) -> bool {
-    println!("{} (y/n)", question);
-    let mut response = String::new();
-    io::stdin().read_line(&mut response).expect("Failed to read user input");
-    if response.trim().to_lowercase() == "y"{
-        true
-    } else {
-        false
-    }
-}
-// This function gets the username the user is logged in 
-// # Return string slice that holds the username
-fn get_username() -> Option<String> {
-    //get username
-    let mut command = Command::new("git");
-    command.arg("config");
-    command.arg("user.name");
-    let out = command.output().expect("Failed to execute command");
-    //return username;
-    let username = str::from_utf8(&out.stdout).ok()?.trim().to_string();
-    Some(username)
-}
-// This function gets the email of the user
-// # Return string slice that holds the email
-fn get_user_email() -> Option<String> {
-    //get email
-    let mut command = Command::new("git");
-    command.arg("config");
-    command.arg("user.email");
-    let out = command.output().expect("Failed to execute command");
-    //return email;
-    let email = str::from_utf8(&out.stdout).ok()?.trim().to_string();
-    Some(email)
-}
-
-// This function reads the public key from the path
-// # Arguments: the path string slice
-// # Returns: a io::Result<String>
-// yay
-fn read_public_key(path: &str) -> io::Result<String> {
-    let mut file = fs::File::open(path)?;
-    let mut contents = String::new();
-    file.read_to_string(&mut contents)?;
-    Ok(contents)
-}
-
-// This function creates a ssh git2 Cred object
-// GitHub keypath neex to be set in .env file
-// # Arguments: the username string slice
-// # Return a Cred object
-fn create_remote_callbacks<'a>() -> RemoteCallbacks<'a> {
-    let mut callbacks = RemoteCallbacks::new();
-    callbacks.credentials(move |_url, _username_from_url, _allowed_types| {
-        match create_ssh_cred() {
-            Ok(cred) => Ok(cred),
-            Err(_) => Err(git2::Error::from_str("Failed to create SSH credentials")),
-        }
-    });
-    callbacks
-}
 
 
-
-fn create_ssh_cred() -> Result<Cred, Box<dyn Error>> {
-    let public_key_path = "/home/jk/.ssh/id_ed25519.pub";
-    //let public_key_path = env::var("PUBLIC_KEY_PATH").expect("Failed to get public key path");
-    // let private_key_path = env::var("PRIVATE_KEY_PATH").expect("Failed to get private key path");
-
-    let _pub_key: Option<Cow<'_, [u8]>> = Some(fs::read(&public_key_path).unwrap().into());
-    let pub_key_path = Path::new(&public_key_path);
-    //panic!("public key path: {}", pub_key_path.display());
-    //let private_key: Option<Cow<'_, [u8]>> = Some(fs::read(&private_key_path).unwrap().into());
-    let username = get_username().expect("Failed to get username");
-    Ok(Cred::ssh_key(
-        &username,  // Provide the username
-        None,               // Use default username if None provided
-        &pub_key_path,
-        None,
-    )?)
-}
 
 
